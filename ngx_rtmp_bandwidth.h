@@ -13,7 +13,7 @@
 
 
 /* Bandwidth update interval in seconds */
-#define NGX_RTMP_BANDWIDTH_INTERVAL     10
+#define NGX_RTMP_BANDWIDTH_INTERVAL     10 // 10s 计算/更新一次带宽信息
 
 
 typedef struct {

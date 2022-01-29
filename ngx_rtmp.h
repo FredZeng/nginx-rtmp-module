@@ -23,14 +23,33 @@ typedef __int8              int8_t;
 typedef unsigned __int8     uint8_t;
 #endif
 
-
+/*
+ * 配置文件上下文
+ * 
+ * main        作用域
+ * server      作用域
+ * application 作用域
+ * 
+ * @example
+ * 
+ * rtmp {
+ *     server {
+ *         application {
+ *         }
+ *     }
+ * }
+ */
 typedef struct {
-    void                  **main_conf;
-    void                  **srv_conf;
-    void                  **app_conf;
+    void                  **main_conf; // rtmp {}
+    void                  **srv_conf;  // server {}
+    void                  **app_conf;  // application {}
 } ngx_rtmp_conf_ctx_t;
 
 
+/*
+ * listen 相关的配置
+ * @see https://github.com/arut/nginx-rtmp-module/wiki/Directives#listen
+ */
 typedef struct {
     u_char                  sockaddr[NGX_SOCKADDRLEN];
     socklen_t               socklen;
@@ -60,11 +79,12 @@ typedef struct {
 } ngx_rtmp_addr_conf_t;
 
 typedef struct {
-    in_addr_t               addr;
+    in_addr_t               addr; // 一般是 32 位的 unsigned int，表示 IPv4 地址
     ngx_rtmp_addr_conf_t    conf;
 } ngx_rtmp_in_addr_t;
 
 
+// 支持 IPv6
 #if (NGX_HAVE_INET6)
 
 typedef struct {
@@ -75,6 +95,7 @@ typedef struct {
 #endif
 
 
+// 端口号
 typedef struct {
     void                   *addrs;
     ngx_uint_t              naddrs;
@@ -113,6 +134,7 @@ typedef struct {
 
 #define NGX_LOG_DEBUG_RTMP              NGX_LOG_DEBUG_CORE
 
+// 流复用的最小块大小，128kb
 #define NGX_RTMP_DEFAULT_CHUNK_SIZE     128
 
 
@@ -137,10 +159,10 @@ typedef struct {
 
 #define NGX_RTMP_MAX_CHUNK_SIZE         10485760
 
-#define NGX_RTMP_CONNECT                NGX_RTMP_MSG_MAX + 1
-#define NGX_RTMP_DISCONNECT             NGX_RTMP_MSG_MAX + 2
-#define NGX_RTMP_HANDSHAKE_DONE         NGX_RTMP_MSG_MAX + 3
-#define NGX_RTMP_MAX_EVENT              NGX_RTMP_MSG_MAX + 4
+#define NGX_RTMP_CONNECT                NGX_RTMP_MSG_MAX + 1 // 23
+#define NGX_RTMP_DISCONNECT             NGX_RTMP_MSG_MAX + 2 // 24
+#define NGX_RTMP_HANDSHAKE_DONE         NGX_RTMP_MSG_MAX + 3 // 25
+#define NGX_RTMP_MAX_EVENT              NGX_RTMP_MSG_MAX + 4 // 26
 
 
 /* RMTP control message types */
@@ -291,6 +313,9 @@ typedef struct {
 } ngx_rtmp_amf_handler_t;
 
 
+/*
+ * main 作用域配置
+ */
 typedef struct {
     ngx_array_t             servers;    /* ngx_rtmp_core_srv_conf_t */
     ngx_array_t             listen;     /* ngx_rtmp_listen_t */
@@ -306,7 +331,9 @@ typedef struct {
 /* global main conf for stats */
 extern ngx_rtmp_core_main_conf_t   *ngx_rtmp_core_main_conf;
 
-
+/*
+ * server 作用域配置
+ */
 typedef struct ngx_rtmp_core_srv_conf_s {
     ngx_array_t             applications; /* ngx_rtmp_core_app_conf_t */
 
@@ -333,7 +360,9 @@ typedef struct ngx_rtmp_core_srv_conf_s {
     ngx_rtmp_conf_ctx_t    *ctx;
 } ngx_rtmp_core_srv_conf_t;
 
-
+/*
+ * application 作用域配置
+ */
 typedef struct {
     ngx_array_t             applications; /* ngx_rtmp_core_app_conf_t */
     ngx_str_t               name;
@@ -346,15 +375,23 @@ typedef struct {
     ngx_rtmp_session_t     *session;
 } ngx_rtmp_error_log_ctx_t;
 
-
+// 模块上下文结构，实际上是提供一组回调函数指针，这些函数有在创建存储配置信息的对象的函数，也有在创建前和创建后会调用的函数。
 typedef struct {
+    // 在创建和读取该模块的配置信息之前被调用
     ngx_int_t             (*preconfiguration)(ngx_conf_t *cf);
+    // 在创建和读取该模块的配置信息之后被调用
     ngx_int_t             (*postconfiguration)(ngx_conf_t *cf);
 
+    // 调用该函数创建本模块位于 rtmp block 的配置信息存储结构。该函数成功的时候，返回创建的配置对象；否则返回 NULL
     void                 *(*create_main_conf)(ngx_conf_t *cf);
+    // 调用该函数初始化本模块位于 rtmp block 的配置信息存储结构。该函数成功的时候，返回 NGX_CONF_OK；否则返回 NGX_CONF_ERROR 或 错误字符串
     char                 *(*init_main_conf)(ngx_conf_t *cf, void *conf);
 
+    // 调用该函数创建本模块位于 rtmp server block 的配置信息存储结构，每个 server block 会创建一个。该函数成功的时候，返回创建的配置对象；否则返回 NULL
     void                 *(*create_srv_conf)(ngx_conf_t *cf);
+    // 因为有些配置指令即可以出现在 rtmp block，也可以出现在 rtmp server block 中。那么遇到这种情况，每个 server 都会有自己的存储结构来存储该 server 的配置；
+    // 但是在这种情况下，rtmp block 中的配置与 server block 中的配置信息发生冲突的时候，就需要调用此函数进行合并；该函数并非必须提供，当预计到绝对不会发生需要合并的情况的时候，就无需提供。
+    // 该函数执行成功的时候，返回 NGX_CONF_OK；否则返回 NGX_CONF_ERROR 或 错误字符串
     char                 *(*merge_srv_conf)(ngx_conf_t *cf, void *prev,
                                     void *conf);
 
@@ -585,11 +622,14 @@ ngx_int_t ngx_rtmp_send_sample_access(ngx_rtmp_session_t *s);
 
 
 /* Frame types */
-#define NGX_RTMP_VIDEO_KEY_FRAME            1
-#define NGX_RTMP_VIDEO_INTER_FRAME          2
+#define NGX_RTMP_VIDEO_KEY_FRAME            1 // 关键帧
+#define NGX_RTMP_VIDEO_INTER_FRAME          2 // 间帧（B、P 帧）
 #define NGX_RTMP_VIDEO_DISPOSABLE_FRAME     3
 
 
+/*
+ * 获取视频帧类型
+ */
 static ngx_inline ngx_int_t
 ngx_rtmp_get_video_frame_type(ngx_chain_t *in)
 {
